@@ -1,4 +1,4 @@
-package com.smartlinguo.dto;
+package com.smartlinguo.dto.request;
 
 import java.util.List;
 
