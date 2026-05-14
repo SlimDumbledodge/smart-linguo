@@ -1,47 +1,88 @@
 package com.smartlinguo.service;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.openai.models.responses.Response;
 import com.openai.models.responses.ResponseCreateParams;
-import com.smartlinguo.dto.CreateTranslationRequest;
+import com.openai.models.responses.ResponseOutputItem;
+import com.smartlinguo.dto.request.CreateTranslationRequest;
+import com.smartlinguo.dto.response.TranslationResult;
+import com.smartlinguo.entity.Translation;
 import com.smartlinguo.enums.SupportedLanguage;
+import com.smartlinguo.repository.TranslationRepository;
+
+import io.smallrye.mutiny.Uni;
+import io.smallrye.mutiny.infrastructure.Infrastructure;
 import jakarta.enterprise.context.ApplicationScoped;
 
 @ApplicationScoped
 public class OpenAiService {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+    private final OpenAIClient client = OpenAIOkHttpClient.fromEnv();
+    private final TranslationRepository translationRepository;
 
+    public OpenAiService(TranslationRepository translationRepository) {
+        this.translationRepository = translationRepository;
+    }
     public record TranslatableItem(
         SupportedLanguage sourceLang,
         SupportedLanguage targetLang,
         List<String> texts
     ) {}
 
-    public void createTranslation(CreateTranslationRequest request) {
+    public Uni<List<TranslationResult>> createTranslation(CreateTranslationRequest request) {
+
         List<TranslatableItem> items = preformatData(request);
         String systemPrompt = createSystemPrompt();
-        try {
-            String userInput = MAPPER.writeValueAsString(items);
-            callOpenAi(systemPrompt, userInput);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException("Failed to serialize translation items", e);
-        }
+
+        List<Uni<Response>> calls = items.stream()
+                .map(item -> callOpenAiUni(systemPrompt, item))
+                .toList();
+
+        return Uni.combine().all().unis(calls)
+                .with(responses -> {
+                    List<TranslationResult> translations = new ArrayList<>();
+
+                    for (int i = 0; i < responses.size(); i++) {
+                        Response response = (Response) responses.get(i);
+
+                        String json = extractOutputText(response);
+                        TranslationResult translation = parseJSON(json);
+                        translations.add(translation);
+                    }
+
+                    List<Translation> entities = toEntities(translations, request);
+                    translationRepository.insertBatch(entities);
+
+                    return translations;
+                });
     }
 
-    private void callOpenAi(String systemPrompt, String userInput) {
-        OpenAIClient client = OpenAIOkHttpClient.fromEnv();
-        ResponseCreateParams params = ResponseCreateParams.builder()
-                .model("gpt-5.5")
-                .instructions(systemPrompt)
-                .input(userInput)
-                .build();
-        Response response = client.responses().create(params);
-        System.out.println(response);
+    private Uni<Response> callOpenAiUni(String systemPrompt, TranslatableItem item) {
+        return Uni.createFrom().item(() -> {
+                    try {
+                        String userInput = MAPPER.writeValueAsString(item);
+
+                        ResponseCreateParams params = ResponseCreateParams.builder()
+                                .model("gpt-5.5")
+                                .instructions(systemPrompt)
+                                .input(userInput)
+                                .build();
+
+                        return client.responses().create(params);
+                    } catch (JsonProcessingException e) {
+                        throw new RuntimeException("Failed to serialize TranslatableItem", e);
+                    }
+                })
+                .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
     }
 
     private List<TranslatableItem> preformatData(CreateTranslationRequest request) {
@@ -59,7 +100,7 @@ public class OpenAiService {
             You are a professional translation API. Your sole function is to translate text.
 
             ## INPUT FORMAT
-            You receive a JSON array where each object has this structure:
+            You receive a JSON object with this structure:
             {
                 "sourceLang": "<ISO 639-1 code, lowercase>",
                 "targetLang": "<ISO 639-1 code, lowercase>",
@@ -67,23 +108,35 @@ public class OpenAiService {
             }
 
             ## YOUR TASK
-            For each object in the array:
             1. Translate EACH element of the "texts" array from "sourceLang" to "targetLang"
             2. Preserve HTML exactly (tags, attributes, href values, structure)
             3. Translate only visible text content — never translate tag names or attributes
-            4. Return a translated version of the full array
+            4. Return exactly one translated JSON object
 
             ## RULES
             - Do NOT modify keys: sourceLang, targetLang, texts
             - Language codes are ISO 639-1, lowercase (e.g. "fr", "en", "es")
             - The "texts" array must keep the SAME order and SAME size as input
             - Preserve all whitespace and formatting
-            - Return a JSON array `[...]`, never a bare object `{...}`
+            - Return exactly one JSON object `{...}`
             - Do NOT add explanations, markdown, or code fences
+
+                        ## STRICT OUTPUT CONTRACT
+                        - Output MUST be valid JSON parseable by a strict JSON parser
+                        - Output MUST start with `{` and end with `}`
+                        - Output MUST contain only this object, with no prefix/suffix text
+                        - Output MUST NOT be an array
+                        - Output MUST NOT contain trailing commas
+                        - Output MUST use double quotes for all keys and string values
+                        - Output MUST follow exactly this shape:
+                            {
+                                "sourceLang": "<string>",
+                                "targetLang": "<string>",
+                                "texts": ["<string>", "..."]
+                            }
 
             ## EXAMPLE
             Input:
-            [
                 {
                     "sourceLang": "en",
                     "targetLang": "fr",
@@ -93,10 +146,8 @@ public class OpenAiService {
                         "Forgot password?"
                     ]
                 }
-            ]
 
             Output:
-            [
                 {
                     "sourceLang": "en",
                     "targetLang": "fr",
@@ -106,7 +157,53 @@ public class OpenAiService {
                         "Mot de passe oublié ?"
                     ]
                 }
-            ]
             """;
+    }
+
+    private TranslationResult parseJSON(String json) {
+        try {
+            return MAPPER.readValue(json, TranslationResult.class);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Invalid JSON from OpenAI", e);
+        }
+    }
+
+    private String extractOutputText(Response response) {
+        String text = response.output().stream()
+            .filter(ResponseOutputItem::isMessage)
+            .map(ResponseOutputItem::asMessage)
+            .flatMap(message -> message.content().stream())
+            .filter(content -> content.isOutputText())
+            .map(content -> content.asOutputText().text())
+            .filter(Objects::nonNull)
+            .collect(java.util.stream.Collectors.joining("\n"));
+
+        if (text.isBlank()) {
+            throw new RuntimeException("No output_text found in OpenAI response output items");
+        }
+
+        return text;
+    }
+
+    private List<Translation> toEntities(List<TranslationResult> translations, CreateTranslationRequest request) {
+        List<Translation> entities = new ArrayList<>();
+
+        for (TranslationResult translation : translations) {
+            UUID uuid = UUID.randomUUID();
+            List<String> translatedTexts = translation.texts();
+
+            for (int i = 0; i < translatedTexts.size(); i++) {
+                Translation t = new Translation();
+                t.translationId  = uuid;
+                t.sourceLang     = translation.sourceLang().getCode();
+                t.targetLang     = translation.targetLang().getCode();
+                t.sourceText     = request.texts().get(i);
+                t.translatedText = translatedTexts.get(i);
+                t.index          = (long) i;
+                entities.add(t);
+            }
+        }
+
+        return entities;
     }
 }

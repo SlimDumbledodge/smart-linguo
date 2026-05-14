@@ -2,7 +2,8 @@ package com.smartlinguo.validation;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.smartlinguo.dto.CreateTranslationRequest;
+import com.smartlinguo.dto.request.CreateTranslationRequest;
+
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.BadRequestException;
 

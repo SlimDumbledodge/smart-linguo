@@ -3,18 +3,17 @@ package com.smartlinguo.entity;
 import io.quarkus.hibernate.orm.panache.PanacheEntity;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
-@Table(
-    name = "translations",
-    uniqueConstraints = {
-        @UniqueConstraint(columnNames = {
-            "field_key",
-            "target_lang"
-        })
-    }
-)
+@Table(name = "translations")
 public class Translation extends PanacheEntity {
+
+    @Column(name = "translation_id", nullable = false)
+    public UUID translationId;
+
+    @Column(name = "index", nullable = false)
+    public Long index;
 
     @Column(name = "source_lang", nullable = false, length = 10)
     public String sourceLang;
