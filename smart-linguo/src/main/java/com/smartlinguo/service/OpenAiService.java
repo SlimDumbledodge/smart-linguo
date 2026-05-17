@@ -23,6 +23,7 @@ import com.smartlinguo.repository.UsageQuotaRepository;
 import io.smallrye.mutiny.Uni;
 import io.smallrye.mutiny.infrastructure.Infrastructure;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.transaction.Transactional;
 
 @ApplicationScoped
 public class OpenAiService {
@@ -66,15 +67,19 @@ public class OpenAiService {
                         translations.add(translation);
                     }
 
-                    UsageQuota quota = usageQuotaRepository.findByKeycloakUserId(keycloakUserId);
-                    quota.tokensRemaining -= totalTokenUsed;
-                    usageQuotaRepository.persist(quota);
-
                     List<Translation> entities = toEntities(translations, request, apiKeyId);
-                    translationRepository.insertBatch(entities);
+                    persistResults(keycloakUserId, totalTokenUsed, entities);
 
                     return translations;
                 });
+    }
+
+    @Transactional
+    void persistResults(String keycloakUserId, long tokensUsed, List<Translation> entities) {
+        UsageQuota quota = usageQuotaRepository.findByKeycloakUserId(keycloakUserId);
+        quota.tokensRemaining -= tokensUsed;
+        usageQuotaRepository.persist(quota);
+        translationRepository.insertBatch(entities);
     }
 
     private Uni<Response> callOpenAiUni(String systemPrompt, TranslatableItem item) {
