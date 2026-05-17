@@ -1,6 +1,5 @@
 package com.smartlinguo.config.stripe;
 
-import io.smallrye.config.ConfigMapping;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
