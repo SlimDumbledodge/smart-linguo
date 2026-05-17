@@ -28,7 +28,7 @@ public class StripeWebhookResource {
     @POST
     @Path("/stripe")
     @Consumes(MediaType.APPLICATION_JSON)
-    @Produces(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.TEXT_PLAIN)
     public Response handle(String payload, @HeaderParam("Stripe-Signature") String sigHeader) {
 
         Event event;
@@ -45,11 +45,6 @@ public class StripeWebhookResource {
 
                 String email = session.path("customer_details").path("email").asText();
                 String tokensRaw = session.path("metadata").path("tokens").asText();
-
-                // Log temporaire
-                System.out.println("=== WEBHOOK DEBUG ===");
-                System.out.println("email: " + email);
-                System.out.println("tokensRaw: " + tokensRaw);
 
                 if (tokensRaw.isBlank()) {
                     System.out.println("metadata tokens manquant, event ignoré");
