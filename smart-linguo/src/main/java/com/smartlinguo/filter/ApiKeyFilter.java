@@ -6,10 +6,12 @@ import com.smartlinguo.entity.UsageQuota;
 import com.smartlinguo.repository.ApiKeyRepository;
 import com.smartlinguo.repository.UsageQuotaRepository;
 import com.smartlinguo.service.ApiKeyService;
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.container.ContainerRequestContext;
 import jakarta.ws.rs.core.Response;
 
+@ApplicationScoped
 public class ApiKeyFilter {
 
     @Inject
