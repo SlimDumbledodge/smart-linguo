@@ -12,8 +12,11 @@ public class Translation extends PanacheEntity {
     @Column(name = "translation_id", nullable = false)
     public UUID translationId;
 
+    @Column(name = "api_key_id", nullable = false)
+    public UUID apiKeyId;
+
     @Column(name = "index", nullable = false)
-    public Long index;
+    public long index;
 
     @Column(name = "source_lang", nullable = false, length = 10)
     public String sourceLang;
@@ -26,6 +29,9 @@ public class Translation extends PanacheEntity {
 
     @Column(name = "translated_text", columnDefinition = "TEXT")
     public String translatedText;
+
+    @Column(name = "tokens_used", nullable = false)
+    public long tokensUsed;
 
     @Column(name = "created_at")
     public LocalDateTime createdAt;
