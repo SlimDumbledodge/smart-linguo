@@ -15,8 +15,10 @@ import com.openai.models.responses.ResponseOutputItem;
 import com.smartlinguo.dto.request.CreateTranslationRequest;
 import com.smartlinguo.dto.response.TranslationResult;
 import com.smartlinguo.entity.Translation;
+import com.smartlinguo.entity.UsageQuota;
 import com.smartlinguo.enums.SupportedLanguage;
 import com.smartlinguo.repository.TranslationRepository;
+import com.smartlinguo.repository.UsageQuotaRepository;
 
 import io.smallrye.mutiny.Uni;
 import io.smallrye.mutiny.infrastructure.Infrastructure;
@@ -28,9 +30,11 @@ public class OpenAiService {
     private static final ObjectMapper MAPPER = new ObjectMapper();
     private final OpenAIClient client = OpenAIOkHttpClient.fromEnv();
     private final TranslationRepository translationRepository;
+    private final UsageQuotaRepository usageQuotaRepository;
 
-    public OpenAiService(TranslationRepository translationRepository) {
+    public OpenAiService(TranslationRepository translationRepository, UsageQuotaRepository usageQuotaRepository) {
         this.translationRepository = translationRepository;
+        this.usageQuotaRepository = usageQuotaRepository;
     }
     public record TranslatableItem(
         SupportedLanguage sourceLang,
@@ -38,7 +42,7 @@ public class OpenAiService {
         List<String> texts
     ) {}
 
-    public Uni<List<TranslationResult>> createTranslation(CreateTranslationRequest request) {
+    public Uni<List<TranslationResult>> createTranslation(CreateTranslationRequest request, UUID apiKeyId, String keycloakUserId) {
 
         List<TranslatableItem> items = preformatData(request);
         String systemPrompt = createSystemPrompt();
@@ -50,16 +54,23 @@ public class OpenAiService {
         return Uni.combine().all().unis(calls)
                 .with(responses -> {
                     List<TranslationResult> translations = new ArrayList<>();
+                    long totalTokenUsed = 0;
 
                     for (int i = 0; i < responses.size(); i++) {
                         Response response = (Response) responses.get(i);
 
+                        long totalTokens = extractTotalTokens(response);
+                        totalTokenUsed += totalTokens;
                         String json = extractOutputText(response);
-                        TranslationResult translation = parseJSON(json);
+                        TranslationResult translation = parseJSON(json, totalTokens);
                         translations.add(translation);
                     }
 
-                    List<Translation> entities = toEntities(translations, request);
+                    UsageQuota quota = usageQuotaRepository.findByKeycloakUserId(keycloakUserId);
+                    quota.tokensRemaining -= totalTokenUsed;
+                    usageQuotaRepository.persist(quota);
+
+                    List<Translation> entities = toEntities(translations, request, apiKeyId);
                     translationRepository.insertBatch(entities);
 
                     return translations;
@@ -160,9 +171,15 @@ public class OpenAiService {
             """;
     }
 
-    private TranslationResult parseJSON(String json) {
+    private TranslationResult parseJSON(String json, long totalTokens) {
         try {
-            return MAPPER.readValue(json, TranslationResult.class);
+            TranslationResult parsed = MAPPER.readValue(json, TranslationResult.class);
+            return new TranslationResult(
+                parsed.sourceLang(),
+                parsed.targetLang(),
+                parsed.texts(),
+                totalTokens
+            );
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Invalid JSON from OpenAI", e);
         }
@@ -185,21 +202,38 @@ public class OpenAiService {
         return text;
     }
 
-    private List<Translation> toEntities(List<TranslationResult> translations, CreateTranslationRequest request) {
+    private long extractTotalTokens(Response response) {
+        long totalTokens = response.usage().stream()
+            .map(usage -> usage.totalTokens())
+            .filter(Objects::nonNull)
+            .map(Number::longValue)
+            .findFirst()
+            .orElseThrow(() -> new RuntimeException("No usage.total_tokens found in OpenAI response"));
+
+        if (totalTokens <= 0) {
+            throw new RuntimeException("OpenAI usage.total_tokens must be > 0");
+        }
+
+        return totalTokens;
+    }
+
+    private List<Translation> toEntities(List<TranslationResult> translations, CreateTranslationRequest request, UUID apiKey) {
         List<Translation> entities = new ArrayList<>();
 
         for (TranslationResult translation : translations) {
             UUID uuid = UUID.randomUUID();
             List<String> translatedTexts = translation.texts();
 
-            for (int i = 0; i < translatedTexts.size(); i++) {
+            for (int index = 0; index < translatedTexts.size(); index++) {
                 Translation t = new Translation();
                 t.translationId  = uuid;
                 t.sourceLang     = translation.sourceLang().getCode();
                 t.targetLang     = translation.targetLang().getCode();
-                t.sourceText     = request.texts().get(i);
-                t.translatedText = translatedTexts.get(i);
-                t.index          = (long) i;
+                t.sourceText     = request.texts().get(index);
+                t.translatedText = translatedTexts.get(index);
+                t.tokensUsed     = translation.totalTokens();
+                t.index          = index;
+                t.apiKeyId       = apiKey;
                 entities.add(t);
             }
         }
