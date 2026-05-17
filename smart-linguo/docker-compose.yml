@@ -2,17 +2,31 @@ services:
   db:
     image: postgres:15
     restart: unless-stopped
-
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-
     ports:
       - "5433:5432"
-
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: smartlinguo-keycloak
+    command: start-dev
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/${DB_NAME}
+      KC_DB_USERNAME: ${DB_USER}
+      KC_DB_PASSWORD: ${DB_PASSWORD}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HTTP_PORT: 8180
+    ports:
+      - "8180:8180"
+    depends_on:
+      - db
 
 volumes:
   postgres_dev_data:
