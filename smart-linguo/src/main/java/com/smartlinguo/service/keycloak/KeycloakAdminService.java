@@ -110,6 +110,27 @@ public class KeycloakAdminService {
         return location.substring(location.lastIndexOf("/") + 1);
     }
 
+    public void sendResetPasswordEmail(String userId) throws Exception {
+        String adminToken = getAdminToken();
+        String url = config.getUrl() + "/admin/realms/" + config.getUserRealm()
+                + "/users/" + userId + "/execute-actions-email";
+
+        String body = mapper.writeValueAsString(List.of("UPDATE_PASSWORD"));
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Authorization", "Bearer " + adminToken)
+                .header("Content-Type", "application/json")
+                .PUT(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() != 204) {
+            throw new RuntimeException("Erreur envoi reset password email : " + response.body());
+        }
+    }
+
     // 4. Récupérer ou créer un user Keycloak → retourne toujours un keycloakUserId
     public String getOrCreateUser(String email) throws Exception {
         String keycloakUserId = findUserByEmail(email);
@@ -118,6 +139,8 @@ public class KeycloakAdminService {
             return keycloakUserId;
         }
 
-        return createUser(email);
+        String newUserId = createUser(email);
+        sendResetPasswordEmail(newUserId);
+        return newUserId;
     }
 }
