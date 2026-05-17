@@ -30,14 +30,14 @@ public class ApiKeyFilter {
 
         String rawKey = ctx.getHeaderString("X-API-Key");
         if (rawKey == null || rawKey.isBlank()) {
-            return Response.status(401).entity("Cle API manquante").build();
+            return Response.status(401).entity("Clé API manquante").build();
         }
 
         String keyHash = apiKeyService.hashRawKey(rawKey);
         ApiKey apiKey = apiKeyRepository.findByKeyHash(keyHash);
 
         if (apiKey == null) {
-            return Response.status(401).entity("Cle API invalide").build();
+            return Response.status(401).entity("Clé API invalide").build();
         }
 
         UsageQuota quota = usageQuotaRepository.findByKeycloakUserId(apiKey.keycloakUserId);
