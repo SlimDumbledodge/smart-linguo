@@ -27,6 +27,11 @@ services:
       - "8180:8180"
     depends_on:
       - db
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # UI web
 
 volumes:
   postgres_dev_data:
