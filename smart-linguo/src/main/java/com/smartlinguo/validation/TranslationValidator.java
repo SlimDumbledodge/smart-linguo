@@ -14,15 +14,6 @@ public class TranslationValidator {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     public void validate(CreateTranslationRequest request) {
-        if (request.sourceLanguage() == null) {
-            throw new BadRequestException("sourceLanguage is required");
-        }
-        if (request.targetLangs() == null || request.targetLangs().isEmpty()) {
-            throw new BadRequestException("At least one target language is required");
-        }
-        if (request.texts() == null || request.texts().isEmpty()) {
-            throw new BadRequestException("texts is required and must not be empty");
-        }
         boolean hasInvalidText = request.texts().stream().anyMatch(text -> text == null || text.isBlank());
         if (hasInvalidText) {
             throw new BadRequestException("texts must contain only non-empty strings");
