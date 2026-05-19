@@ -12,10 +12,13 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import org.jboss.logging.Logger;
 
 @Path("/webhook")
 @ApplicationScoped
 public class StripeWebhookResource {
+
+    private static final Logger LOG = Logger.getLogger(StripeWebhookResource.class);
 
     @Inject
     StripeConfig stripeConfig;
@@ -30,11 +33,11 @@ public class StripeWebhookResource {
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.TEXT_PLAIN)
     public Response handle(String payload, @HeaderParam("Stripe-Signature") String sigHeader) {
-
         Event event;
         try {
             event = Webhook.constructEvent(payload, sigHeader, stripeConfig.getWebhookSecret());
         } catch (SignatureVerificationException e) {
+            LOG.warn("Webhook Stripe rejeté - signature invalide");
             return Response.status(400).entity("Signature invalide").build();
         }
 
@@ -42,20 +45,19 @@ public class StripeWebhookResource {
             try {
                 String rawJson = event.getDataObjectDeserializer().getRawJson();
                 JsonNode session = mapper.readTree(rawJson);
-
                 String email = session.path("customer_details").path("email").asText();
-                String tokensRaw = session.path("metadata").path("tokens").asText();
+                String priceId = session.path("metadata").path("priceId").asText();
 
-                if (tokensRaw.isBlank()) {
-                    System.out.println("metadata tokens manquant, event ignoré");
+                if (priceId.isBlank()) {
+                    LOG.warnf("Webhook %s ignoré - metadata priceId manquant", event.getId());
                     return Response.ok().build();
                 }
 
-                long tokens = Long.parseLong(tokensRaw);
-                stripeService.handleCheckoutCompleted(email, tokens);
+                LOG.infof("Webhook %s reçu - checkout.session.completed pour %s", event.getId(), email);
+                stripeService.handleCheckoutCompleted(event.getId(), email, priceId);
 
             } catch (Exception e) {
-                e.printStackTrace();
+                LOG.errorf(e, "Erreur inattendue lors du traitement du webhook %s", event.getId());
                 return Response.status(500).entity("Erreur : " + e.getMessage()).build();
             }
         }

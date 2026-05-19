@@ -43,7 +43,7 @@ public class StripeCheckoutSessionResource {
                                     .build()
                     )
                     .putMetadata("email", request.getEmail())
-                    .putMetadata("tokens", String.valueOf(request.getTokens()))
+                    .putMetadata("priceId", String.valueOf(request.getPriceId()))
                     .build();
 
             Session session = Session.create(params);
