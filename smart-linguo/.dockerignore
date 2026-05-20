@@ -1,5 +1,7 @@
-*
-!target/*-runner
-!target/*-runner.jar
-!target/lib/*
-!target/quarkus-app/*
+target/
+.vscode/
+.mvn/
+*.md
+.env
+.env.example
+.gitignore
