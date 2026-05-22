@@ -63,7 +63,17 @@ public class OpenAiService {
                         long totalTokens = extractTotalTokens(response);
                         totalTokenUsed += totalTokens;
                         String json = extractOutputText(response);
-                        TranslationResult translation = parseJSON(json, totalTokens);
+                        ParsedTranslation parsed = parseJSON(json);
+
+                        UUID uuid = UUID.randomUUID();
+                        TranslationResult translation = new TranslationResult(
+                            uuid,
+                            parsed.sourceLang(),
+                            parsed.targetLang(),
+                            parsed.texts(),
+                            totalTokens
+                        );
+
                         translations.add(translation);
                     }
 
@@ -176,15 +186,13 @@ public class OpenAiService {
             """;
     }
 
-    private TranslationResult parseJSON(String json, long totalTokens) {
+    private static record ParsedTranslation(SupportedLanguage sourceLang, SupportedLanguage targetLang, List<String> texts) {}
+
+    private ParsedTranslation parseJSON(String json) {
         try {
-            TranslationResult parsed = MAPPER.readValue(json, TranslationResult.class);
-            return new TranslationResult(
-                parsed.sourceLang(),
-                parsed.targetLang(),
-                parsed.texts(),
-                totalTokens
-            );
+            // parse into a lightweight structure matching OpenAI output
+            ParsedTranslation parsed = MAPPER.readValue(json, ParsedTranslation.class);
+            return parsed;
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Invalid JSON from OpenAI", e);
         }
@@ -226,7 +234,7 @@ public class OpenAiService {
         List<Translation> entities = new ArrayList<>();
 
         for (TranslationResult translation : translations) {
-            UUID uuid = UUID.randomUUID();
+            UUID uuid = translation.translationId();
             List<String> translatedTexts = translation.texts();
 
             for (int index = 0; index < translatedTexts.size(); index++) {
