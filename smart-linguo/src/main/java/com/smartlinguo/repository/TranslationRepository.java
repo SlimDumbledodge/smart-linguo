@@ -1,8 +1,12 @@
 package com.smartlinguo.repository;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
+import com.smartlinguo.dto.response.TranslationResult;
 import com.smartlinguo.entity.Translation;
+import com.smartlinguo.enums.SupportedLanguage;
 
 import io.quarkus.hibernate.orm.panache.PanacheRepository;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -31,5 +35,24 @@ public class TranslationRepository implements PanacheRepository<Translation> {
         }
         entityManager.flush();
         entityManager.clear();
+    }
+
+    public Optional<TranslationResult> findTranslationById(UUID translationId) {
+        List<Translation> rows = find("translationId = ?1 order by index asc", translationId).list();
+
+        if (rows == null || rows.isEmpty()) {
+            return Optional.empty();
+        }
+
+        SupportedLanguage source = SupportedLanguage.fromValue(rows.get(0).sourceLang);
+        SupportedLanguage target = SupportedLanguage.fromValue(rows.get(0).targetLang);
+
+        List<String> texts = rows.stream()
+            .map(r -> r.translatedText)
+            .toList();
+
+        long totalTokens = rows.get(0).tokensUsed;
+
+        return Optional.of(new TranslationResult(rows.get(0).translationId, source, target, texts, totalTokens));
     }
 }
