@@ -13,6 +13,7 @@ import com.openai.models.responses.Response;
 import com.openai.models.responses.ResponseCreateParams;
 import com.openai.models.responses.ResponseOutputItem;
 import com.smartlinguo.dto.request.CreateTranslationRequest;
+import com.smartlinguo.dto.response.CreateTranslationResponse;
 import com.smartlinguo.dto.response.TranslationResult;
 import com.smartlinguo.entity.Translation;
 import com.smartlinguo.entity.UsageQuota;
@@ -43,7 +44,7 @@ public class OpenAiService {
         List<String> texts
     ) {}
 
-    public Uni<List<TranslationResult>> createTranslation(CreateTranslationRequest request, UUID apiKeyId, String keycloakUserId) {
+    public Uni<CreateTranslationResponse> createTranslation(CreateTranslationRequest request, UUID apiKeyId, String keycloakUserId) {
 
         List<TranslatableItem> items = preformatData(request);
         String systemPrompt = createSystemPrompt();
@@ -78,18 +79,19 @@ public class OpenAiService {
                     }
 
                     List<Translation> entities = toEntities(translations, request, apiKeyId);
-                    persistResults(keycloakUserId, totalTokenUsed, entities);
+                    long remainingTokens = persistResults(keycloakUserId, totalTokenUsed, entities);
 
-                    return translations;
+                    return new CreateTranslationResponse(translations, remainingTokens);
                 });
     }
 
     @Transactional
-    void persistResults(String keycloakUserId, long tokensUsed, List<Translation> entities) {
+    long persistResults(String keycloakUserId, long tokensUsed, List<Translation> entities) {
         UsageQuota quota = usageQuotaRepository.findByKeycloakUserId(keycloakUserId);
         quota.tokensRemaining -= tokensUsed;
         usageQuotaRepository.persist(quota);
         translationRepository.insertBatch(entities);
+        return quota.tokensRemaining;
     }
 
     private Uni<Response> callOpenAiUni(String systemPrompt, TranslatableItem item) {

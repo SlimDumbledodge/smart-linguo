@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.UUID;
 
 import com.smartlinguo.dto.request.CreateTranslationRequest;
+import com.smartlinguo.dto.response.CreateTranslationResponse;
 import com.smartlinguo.dto.response.TranslationResult;
 import com.smartlinguo.service.OpenAiService;
 import com.smartlinguo.service.TranslationService;
@@ -39,7 +40,7 @@ public class TranslationResource {
     }
 
     @POST
-    public Uni<List<TranslationResult>> createTranslation(@Valid CreateTranslationRequest request) {
+    public Uni<CreateTranslationResponse> createTranslation(@Valid CreateTranslationRequest request) {
         this.translationValidator.validate(request);
 
         UUID apiKeyId = (UUID) requestContext.getProperty("apiKeyId");
