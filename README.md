@@ -1,109 +1,85 @@
-# <img src="favicon.svg" width="28" align="center" /> SmartLinguo
+# Smart Linguo API
 
-**AI-powered multilingual translation API.**  
-Buy credits, get an API key, translate.
+<p align="center">
+  <img src="./assets/logo.png" width="140" alt="SmartLinguo Logo" />
+</p>
+
+<p align="center">
+  AI-powered translation infrastructure built for developers and global products.
+</p>
 
 ---
 
-## What it is
+## Overview
 
-SmartLinguo is a translation SaaS API. Buy a token pack, receive an API key, call `/translate`. That's it.
+SmartLinguo API is a scalable translation platform powered by OpenAI, designed for applications that need fast, secure, and production-ready multilingual capabilities.
 
-```bash
-curl -X POST https://api.smartlinguo.com/translate \
-  -H "X-API-Key: sl_xxxxxxxxxxxxxxxx" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text": "Hello, world!",
-    "sourceLanguage": "en",
-    "targetLanguages": ["fr", "es", "de"]
-  }'
-```
+The platform provides:
 
-```json
-{
-  "fr": "Bonjour, le monde !",
-  "es": "¡Hola, mundo!",
-  "de": "Hallo, Welt!"
-}
-```
+- AI translations via OpenAI
+- Token-based consumption model
+- Stripe-powered payments
+- Secure authentication with Keycloak
+- API key generation and quota management
+- Translation history tracking
+- Cloud-ready infrastructure
+
+This repository contains the core backend API built with Quarkus and Java 21.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Backend | Quarkus 3 |
+| Language | Java 21 |
+| Database | PostgreSQL |
+| Authentication | Keycloak |
+| Payments | Stripe |
+| AI Provider | OpenAI |
+| Containerization | Docker |
+| Cloud | AWS |
+| Observability | CloudWatch |
 
 ---
 
 ## Features
 
-- **Multi-language translation** in a single API call
-- **Credit-based model** — buy what you need, no subscription
-- **Dedicated API key** per account, generated from the dashboard
-- **Real-time quota** — check your remaining tokens at any time
-- **Secure payments** via Stripe
-- **Authentication** via Keycloak (OpenID Connect)
+### AI Translation API
+Translate content using OpenAI models through a unified SmartLinguo API.
+
+### Secure API Keys
+Generate and manage API keys linked to authenticated accounts.
+
+### Token Quota System
+Consumption-based architecture using prepaid translation credits.
+
+### Stripe Integration
+Automatic quota recharge after successful checkout sessions.
+
+### Keycloak Authentication
+Enterprise-grade identity and access management.
+
+### Translation History
+Track requests and monitor API usage over time.
+
+### Production-Ready Infrastructure
+Dockerized environment with AWS deployment support.
 
 ---
 
-## Pricing
+## Architecture
 
-| Plan | Tokens | Price |
-|---|---|---|
-| Starter | 50,000 | €9.99 |
-| Pro | 500,000 | €24.99 |
-| Business | 5,000,000 | €99.99 |
-
-Tokens map to OpenAI tokens consumed by your translation requests. A typical call uses between 100 and 500 tokens depending on text length.
-
----
-
-## Stack
-
-| | |
-|---|---|
-| **API** | Quarkus 3 (reactive, Mutiny) · Java 21 |
-| **AI** | OpenAI API |
-| **Auth** | Keycloak 26 (OpenID Connect) |
-| **Payments** | Stripe |
-| **Database** | PostgreSQL 15 |
-| **Infrastructure** | AWS — EC2, RDS, ALB, Route 53, ACM |
-| **Observability** | CloudWatch (logs, metrics, alarms) |
-
----
-
-## Quick Start
-
-**1. Buy a plan** at [smartlinguo.com](#) — you'll receive an email to set your password.
-
-**2. Log in** to the dashboard and generate your API key.
-
-**3. Call the API:**
-
-```bash
-curl -X POST https://api.smartlinguo.com/translate \
-  -H "X-API-Key: YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text": "Good morning!",
-    "sourceLanguage": "en",
-    "targetLanguages": ["fr", "es"]
-  }'
-```
-
----
-
-## Documentation
-
-| | |
-|---|---|
-| 🔑 [Get an API key](#) | Create your account and generate your key |
-| 📖 [API Reference](#) | All endpoints, parameters and error codes |
-| 💳 [Plans & Pricing](#) | Compare plans |
-
----
-
-## Contributing
-
-This repository contains the Quarkus API source code. To run the local development environment, see the [contribution guide](CONTRIBUTING.md).
-
----
-
-## License
-
-[MIT](LICENSE)
+```text
+Client Application
+        │
+        ▼
+SmartLinguo API (Quarkus)
+        │
+ ┌──────┼──────┐
+ ▼      ▼      ▼
+OpenAI Stripe Keycloak
+        │
+        ▼
+ PostgreSQL
